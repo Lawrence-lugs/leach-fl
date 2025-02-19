@@ -21,7 +21,7 @@ from flwr.simulation import run_simulation
 from flwr_datasets import FederatedDataset
 
 def load_datasets(partition_id: int):
-    fds = FederatedDataset(dataset="google/speech_commands", partitioners={"train": NUM_CLIENTS}, subset='v0.02')
+    fds = FederatedDataset(dataset="speech_commands", partitioners={"train": NUM_CLIENTS}, subset='v0.01')
     partition = fds.load_partition(partition_id)
 
     # Divide data on each node: 80% train, 20% test
@@ -51,4 +51,4 @@ batch = next(iter(trainloader))
 
 #%% Run ks model
 
- 
+u_ks_model = nodes.ad_node.ad_model()
