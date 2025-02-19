@@ -64,9 +64,9 @@ def load_datasets(partition_id: int):
     testloader = DataLoader(testset, batch_size=BATCH_SIZE)
     return trainloader, valloader, testloader
 
-trainloader, valloader, testloader = load_datasets(partition_id=0)
-batch = next(iter(trainloader))
-images, labels = batch["img"], batch["label"]
+# trainloader, valloader, testloader = load_datasets(partition_id=0)
+# batch = next(iter(trainloader))
+# images, labels = batch["img"], batch["label"]
 
 #%%
 import models.resnet
@@ -94,7 +94,8 @@ optimizer = torch.optim.SGD(
 
 criterion = nn.CrossEntropyLoss()
 u_dp_model = nodes.ic_node.dp_model(model, optimizer, criterion, device=DEVICE, tb_writer=writer, trainloader=trainloader, testloader=testloader, learning_epochs=200)
-u_dp_model.sup_train()
+# u_dp_model.sup_train()
+
 
 #%%
 import models.resnet
@@ -104,22 +105,16 @@ import importlib
 importlib.reload(nodes.ic_node)
 
 model = models.resnet.MLPerfTiny_ResNet_Baseline(10).to(DEVICE)
-optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=0.1,
-            momentum=0.9,
-            # weight_decay=1e-4
-        )
-criterion = nn.CrossEntropyLoss()
 writer = tensorboardX.SummaryWriter()
 
 def client_fn(context: Context) -> Client:
+    
+    print(context.node_config)
+
+    partition_id = context.node_config["partition-id"]
+    trainloader, valloader, testloader = load_datasets(partition_id)    
+    u_dp_model = nodes.ic_node.dp_model(model, device=DEVICE, tb_writer=None, trainloader=trainloader, testloader=valloader, learning_epochs=10)
     net = u_dp_model.model
-    partition_id = context.node_config['partition_id']
-    trainloader, valloader, testloader = load_datasets(partition_id)
-    
-    u_dp_model = nodes.ic_node.dp_model(model, optimizer, criterion, device=DEVICE, tb_writer=None, trainloader=trainloader, testloader=valloader, learning_epochs=10)
-    
     return nodes.ic_node.dl_node(u_dp_model, name=f"client_{partition_id}", device=DEVICE, writer=None).to_client()
 
 client = ClientApp(client_fn=client_fn)
@@ -159,7 +154,4 @@ run_simulation(
     backend_config=backend_config,
 )
 
-#%%
-
-u_nod = nodes.ic_node.dl_node(u_dp_model, device=DEVICE, writer=writer).to_client()
-#%%
+# %%

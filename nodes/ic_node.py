@@ -12,12 +12,9 @@ class dp_model():
     A distributed processing model running inside a WSN node
     Uses mobilenetv2 on CIFAR10 by default
     '''
-    def __init__(self, model, optimizer=None, criterion=None, scheduler=None, device='cuda', learning_epochs=150, name='default_name', tb_writer = None, trainloader = None, testloader = None, testset_length = None):
+    def __init__(self, model, device='cuda', learning_epochs=150, name='default_name', tb_writer = None, trainloader = None, testloader = None, testset_length = None):
 
         self.model = model
-        self.optimizer = optimizer
-        self.criterion = criterion
-        self.scheduler = scheduler
         self.learning_epochs = learning_epochs
         self.name = name
         self.writer = tb_writer
@@ -36,6 +33,16 @@ class dp_model():
 
     def sup_train(self):
         print(f'Starting training using device {self.device}...')
+
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            self.model.parameters(),
+            lr=0.1,
+            momentum=0.9,
+            # weight_decay=1e-4
+        )
+        # Saving the momentum is useless between rounds
+
         while self.epoch < self.learning_epochs:
             model = self.model
             model.train()
@@ -48,16 +55,16 @@ class dp_model():
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
                 
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 outputs = model(inputs)
-                loss = self.criterion(outputs,labels)
+                loss = criterion(outputs,labels)
                 runloss += loss
                 
                 _, preds = torch.max(outputs,1)
                 epochscore += torch.sum(preds == labels.data)
 
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
             
             with torch.no_grad():
                 _,accuracy = self.test(self.model)
@@ -68,9 +75,6 @@ class dp_model():
                 self.writer.add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
                 self.writer.add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
                 self.writer.add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
-                              
-            if self.scheduler is not None:
-                self.scheduler.step()
 
             self.epoch+=1
             self.global_epoch+=1
@@ -89,7 +93,7 @@ class dp_model():
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
             outputs = model(inputs)
-            loss += self.criterion(outputs, labels).item()
+            loss += criterion(outputs, labels).item()
             _, preds = torch.max(outputs,1)
             total_correct += torch.sum(preds == labels.data)
         accuracy = total_correct/len(self.testloader.dataset)
@@ -113,7 +117,7 @@ class dl_node(fl.client.NumPyClient):
         self.energy = 500
         self.round = 0
 
-    def get_parameters(self):
+    def get_parameters(self, config):
         '''
         Returns the parameters of the local net
         '''
