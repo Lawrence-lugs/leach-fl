@@ -6,18 +6,20 @@ import flwr as fl
 from typing import List, OrderedDict
 import numpy as np
 import pickle
+import tensorboardX
+
+writer = tensorboardX.SummaryWriter()
 
 class dp_model():
     '''
     A distributed processing model running inside a WSN node
     Uses mobilenetv2 on CIFAR10 by default
     '''
-    def __init__(self, model, device='cuda', learning_epochs=150, name='default_name', tb_writer = None, trainloader = None, testloader = None, testset_length = None):
+    def __init__(self, model, device='cuda', learning_epochs=150, name='default_name', trainloader = None, testloader = None, testset_length = None):
 
         self.model = model
         self.learning_epochs = learning_epochs
         self.name = name
-        self.writer = tb_writer
 
         self.trainloader = trainloader
         self.testloader = testloader
@@ -71,16 +73,16 @@ class dp_model():
                 trainacc = epochscore/len(self.trainloader.dataset)
             print(f'[Node:{self.name}]\t epoch:{self.global_epoch}/{self.epoch}:\ttestacc:{accuracy}\ttrainacc:{trainacc}\tloss:{runloss}')
 
-            if self.writer is not None:
-                self.writer.add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
-                self.writer.add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
-                self.writer.add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
+            writer.add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
+            writer.add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
+            writer.add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
 
             self.epoch+=1
             self.global_epoch+=1
 
     def test(self,num_batches = None):       
-        ''' Tests the accuracy of the dp model on testset ''' 
+        ''' Tests the accuracy of the dp model on testset '''
+        criterion = torch.nn.CrossEntropyLoss()
         model = self.model.to(self.device)
         model.eval()
         if num_batches is None:
@@ -107,9 +109,8 @@ class dl_node(fl.client.NumPyClient):
 
     This inherits from flower client for federated learning.
     '''
-    def __init__(self, dp_model, name='default_name', device='cuda', writer=None):
+    def __init__(self, dp_model, name='default_name', device='cuda'):
         self.device = device
-        self.writer = writer
         self.dp_model = dp_model
         self.net = self.dp_model.model
         self.dp_model.name = name
@@ -131,6 +132,11 @@ class dl_node(fl.client.NumPyClient):
         state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
         self.dp_model.model.load_state_dict(state_dict, strict=True)
 
+    # def set_parameters(self, parameters: List[np.ndarray]):
+    #     params_dict = zip(self.net.state_dict().keys(), parameters)
+    #     state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+    #     self.net.load_state_dict(state_dict, strict=True)
+
     def fit(self, parameters, config):
         self.set_parameters(parameters)
         
@@ -143,12 +149,14 @@ class dl_node(fl.client.NumPyClient):
         #decrement 20 energy just for sending things
         self.energy-=20
         
-        self.writer.add_scalar(f'data/node_{self.name}/energy',self.energy,self.round)
+        writer.add_scalar(f'data/node_{self.name}/energy',self.energy,self.round)
+        
         self.round+=1
         
         print(f'[Node {self.name}]\tenergy: {self.energy}\tlocal round: {self.round}')
 
-        self.save_node()
+        # self.save_node()
+
         return self.get_parameters(self.net), len(self.dp_model.trainloader), {"accuracy": accuracy}
     
     def evaluate(self, parameters, config):

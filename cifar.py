@@ -68,44 +68,40 @@ def load_datasets(partition_id: int):
 # batch = next(iter(trainloader))
 # images, labels = batch["img"], batch["label"]
 
-#%%
-import models.resnet
-import nodes.ic_node
-import tensorboardX
-import importlib
-importlib.reload(nodes.ic_node)
+# import models.resnet
+# import nodes.ic_node
+# import tensorboardX
+# import importlib
+# importlib.reload(nodes.ic_node)
 
-# Create writer
-writer = tensorboardX.SummaryWriter()
+# # Create writer
+# writer = tensorboardX.SummaryWriter()
 
-model = models.resnet.MLPerfTiny_ResNet_Baseline(10).to(DEVICE)
+# model = models.resnet.MLPerfTiny_ResNet_Baseline(10).to(DEVICE)
 
-optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=0.1,
-            momentum=0.9,
-            # weight_decay=1e-4
-        )
-
-# optimizer = torch.optim.Adam(
+# optimizer = torch.optim.SGD(
 #             model.parameters(),
-#             lr=0.001
+#             lr=0.1,
+#             momentum=0.9,
+#             # weight_decay=1e-4
 #         )
 
-criterion = nn.CrossEntropyLoss()
-u_dp_model = nodes.ic_node.dp_model(model, optimizer, criterion, device=DEVICE, tb_writer=writer, trainloader=trainloader, testloader=testloader, learning_epochs=200)
+# # optimizer = torch.optim.Adam(
+# #             model.parameters(),
+# #             lr=0.001
+# #         )
+
+# criterion = nn.CrossEntropyLoss()    
+# trainloader, valloader, testloader = load_datasets(0)    
+# u_dp_model = nodes.ic_node.dp_model(model, device=DEVICE, tb_writer=writer, trainloader=trainloader, testloader=testloader, learning_epochs=200)
 # u_dp_model.sup_train()
 
-
-#%%
 import models.resnet
 import nodes.ic_node
-import tensorboardX
 import importlib
 importlib.reload(nodes.ic_node)
 
 model = models.resnet.MLPerfTiny_ResNet_Baseline(10).to(DEVICE)
-writer = tensorboardX.SummaryWriter()
 
 def client_fn(context: Context) -> Client:
     
@@ -113,9 +109,9 @@ def client_fn(context: Context) -> Client:
 
     partition_id = context.node_config["partition-id"]
     trainloader, valloader, testloader = load_datasets(partition_id)    
-    u_dp_model = nodes.ic_node.dp_model(model, device=DEVICE, tb_writer=None, trainloader=trainloader, testloader=valloader, learning_epochs=10)
+    u_dp_model = nodes.ic_node.dp_model(model, device=DEVICE, trainloader=trainloader, testloader=valloader, learning_epochs=10)
     net = u_dp_model.model
-    return nodes.ic_node.dl_node(u_dp_model, name=f"client_{partition_id}", device=DEVICE, writer=None).to_client()
+    return nodes.ic_node.dl_node(u_dp_model, name=f"client_{partition_id}", device=DEVICE).to_client()
 
 client = ClientApp(client_fn=client_fn)
 
